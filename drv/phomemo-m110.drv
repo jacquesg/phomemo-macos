@@ -1,0 +1,201 @@
+//
+// Driver info file for Phomemo M110, M120, and M220
+//
+// Copyright (c) 2026 Jacques Germishuys
+// SPDX-License-Identifier: MIT
+//
+// Based on phomemo-m110.drv from phomemo-tools
+// Copyright (C) 2020 Laurent Vivier <laurent@vivier.eu>
+//
+// Label sizes from Phomemo product catalogue (phomemo.com).
+// M110/M120 print head: 48mm max width, 203 DPI.
+// M220 print head: 75mm max width, 203 DPI.
+
+#include <font.defs>
+#include <media.defs>
+#include <label.h>
+
+// --- Rectangular labels ---
+#media "w20h10/Rectangle 20x10mm" 20mm 10mm
+#media "w25h10/Rectangle 25x10mm" 25mm 10mm
+#media "w25h15/Rectangle 25x15mm" 25mm 15mm
+#media "w25h67/Rectangle 25x67mm" 25mm 67mm
+#media "w30h15/Rectangle 30x15mm" 30mm 15mm
+#media "w30h20/Rectangle 30x20mm" 30mm 20mm
+#media "w30h40/Rectangle 30x40mm" 30mm 40mm
+#media "w35h15/Rectangle 35x15mm" 35mm 15mm
+#media "w40h15/Rectangle 40x15mm" 40mm 15mm
+#media "w40h20/Rectangle 40x20mm" 40mm 20mm
+#media "w40h30/Rectangle 40x30mm" 40mm 30mm
+#media "w40h60/Rectangle 40x60mm" 40mm 60mm
+#media "w40h70/Rectangle 40x70mm" 40mm 70mm
+#media "w40h80/Rectangle 40x80mm" 40mm 80mm
+#media "w45h15/Rectangle 45x15mm" 45mm 15mm
+#media "w50h20/Rectangle 50x20mm" 50mm 20mm
+#media "w50h30/Rectangle 50x30mm" 50mm 30mm
+#media "w50h50/Rectangle 50x50mm" 50mm 50mm
+#media "w50h70/Rectangle 50x70mm" 50mm 70mm
+#media "w50h80/Rectangle 50x80mm" 50mm 80mm
+#media "w20h100/Rectangle 20x100mm" 20mm 100mm
+
+// --- Round labels (bounding box) ---
+#media "w20h20/Round 20mm" 20mm 20mm
+#media "w30h30/Round 30mm" 30mm 30mm
+#media "w40h40/Round 40mm" 40mm 40mm
+#media "w50h50r/Round 50mm" 50mm 50mm
+
+// --- Jewellery / cable labels (printable flag area) ---
+#media "w25h30/Jewellery 25x30mm" 25mm 30mm
+#media "w25h38/Cable 25x38mm (+40mm tail)" 25mm 38mm
+#media "w30h25/Jewellery 30x25mm (+45mm tail)" 30mm 25mm
+
+// --- M220 only (>50mm width) ---
+#media "w60h40/Rectangle 60x40mm" 60mm 40mm
+#media "w60h60/Rectangle 60x60mm" 60mm 60mm
+#media "w60h80/Rectangle 60x80mm" 60mm 80mm
+#media "w60h86/Rectangle 60x86mm" 60mm 86mm
+#media "w70h40/Rectangle 70x40mm" 70mm 40mm
+#media "w70h70/Rectangle 70x70mm" 70mm 70mm
+#media "w70h80/Rectangle 70x80mm" 70mm 80mm
+
+Manufacturer "Phomemo"
+Version 1.0
+DriverType label
+ColorDevice No
+Attribute "cupsSNMPSupplies" "" "false"
+HWMargins 0 0 0 0
+
+Filter "application/vnd.cups-raster 100 rastertopm110"
+*Resolution - 8 0 0 0 203dpi
+ColorModel Gray/Grayscale w chunky 0
+
+*MediaType 10 "LabelWithGaps/Label With Gaps"
+MediaType 11 "Continuous"
+MediaType 38 "LabelWithMarks/Label With Marks"
+
+{
+  ModelName "M110"
+  PCFileName "Phomemo-M110.ppd"
+  Attribute "NickName" "" "Phomemo M110"
+
+  // Rectangular
+  MediaSize "w20h10"
+  MediaSize "w25h10"
+  MediaSize "w25h15"
+  MediaSize "w25h67"
+  MediaSize "w30h15"
+  MediaSize "w30h20"
+  MediaSize "w30h40"
+  MediaSize "w35h15"
+  MediaSize "w40h15"
+  MediaSize "w40h20"
+  *MediaSize "w40h30"
+  MediaSize "w40h60"
+  MediaSize "w40h70"
+  MediaSize "w40h80"
+  MediaSize "w45h15"
+  MediaSize "w50h20"
+  MediaSize "w50h30"
+  MediaSize "w50h50"
+  MediaSize "w50h70"
+  MediaSize "w50h80"
+  MediaSize "w20h100"
+
+  // Round
+  MediaSize "w20h20"
+  MediaSize "w30h30"
+  MediaSize "w40h40"
+  MediaSize "w50h50r"
+
+  // Jewellery / cable
+  MediaSize "w25h30"
+  MediaSize "w25h38"
+  MediaSize "w30h25"
+}
+{
+  ModelName "M120"
+  PCFileName "Phomemo-M120.ppd"
+  Attribute "NickName" "" "Phomemo M120"
+
+  // Rectangular
+  MediaSize "w20h10"
+  MediaSize "w25h10"
+  MediaSize "w25h15"
+  MediaSize "w25h67"
+  MediaSize "w30h15"
+  MediaSize "w30h20"
+  MediaSize "w30h40"
+  MediaSize "w35h15"
+  MediaSize "w40h15"
+  MediaSize "w40h20"
+  *MediaSize "w40h30"
+  MediaSize "w40h60"
+  MediaSize "w40h70"
+  MediaSize "w40h80"
+  MediaSize "w45h15"
+  MediaSize "w50h20"
+  MediaSize "w50h30"
+  MediaSize "w50h50"
+  MediaSize "w50h70"
+  MediaSize "w50h80"
+  MediaSize "w20h100"
+
+  // Round
+  MediaSize "w20h20"
+  MediaSize "w30h30"
+  MediaSize "w40h40"
+  MediaSize "w50h50r"
+
+  // Jewellery / cable
+  MediaSize "w25h30"
+  MediaSize "w25h38"
+  MediaSize "w30h25"
+}
+{
+  ModelName "M220"
+  PCFileName "Phomemo-M220.ppd"
+  Attribute "NickName" "" "Phomemo M220"
+
+  // Rectangular (M110/M120 sizes)
+  MediaSize "w20h10"
+  MediaSize "w25h10"
+  MediaSize "w25h15"
+  MediaSize "w25h67"
+  MediaSize "w30h15"
+  MediaSize "w30h20"
+  MediaSize "w30h40"
+  MediaSize "w35h15"
+  MediaSize "w40h15"
+  MediaSize "w40h20"
+  *MediaSize "w40h30"
+  MediaSize "w40h60"
+  MediaSize "w40h70"
+  MediaSize "w40h80"
+  MediaSize "w45h15"
+  MediaSize "w50h20"
+  MediaSize "w50h30"
+  MediaSize "w50h50"
+  MediaSize "w50h70"
+  MediaSize "w50h80"
+  MediaSize "w20h100"
+
+  // Round
+  MediaSize "w20h20"
+  MediaSize "w30h30"
+  MediaSize "w40h40"
+  MediaSize "w50h50r"
+
+  // Jewellery / cable
+  MediaSize "w25h30"
+  MediaSize "w25h38"
+  MediaSize "w30h25"
+
+  // M220 wide labels (>50mm)
+  MediaSize "w60h40"
+  MediaSize "w60h60"
+  MediaSize "w60h80"
+  MediaSize "w60h86"
+  MediaSize "w70h40"
+  MediaSize "w70h70"
+  MediaSize "w70h80"
+}

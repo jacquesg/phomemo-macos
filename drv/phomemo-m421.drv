@@ -1,0 +1,87 @@
+//
+// Driver info file for Phomemo M421
+//
+// Copyright (c) 2026 Jacques Germishuys
+// SPDX-License-Identifier: MIT
+//
+// Based on phomemo-m421.drv from phomemo-tools
+// Copyright (C) 2025 Yury Chuyko <code@mrgr.net>
+
+#include <font.defs>
+#include <media.defs>
+#include <label.h>
+
+#media "w40h15/Label 40mmx15mm" 40mm 15mm
+#media "w40h20/Label 40mmx20mm" 40mm 20mm
+#media "w40h30/Label 40mmx30mm" 40mm 30mm
+#media "w40h40/Label 40mmx40mm" 40mm 40mm
+#media "w40h60/Label 40mmx60mm" 40mm 60mm
+#media "w40h70/Label 40mmx70mm" 40mm 70mm
+#media "w40h80/Label 40mmx80mm" 40mm 80mm
+#media "w45h15/Label 45mmx15mm" 45mm 15mm
+#media "w45h20/Label 45mmx20mm" 45mm 20mm
+#media "w45h60/Label 45mmx60mm" 45mm 60mm
+#media "w45h80/Label 45mmx80mm" 45mm 80mm
+#media "w50h15/Label 50mmx15mm" 50mm 15mm
+#media "w50h20/Label 50mmx20mm" 50mm 20mm
+#media "w50h30/Label 50mmx30mm" 50mm 30mm
+#media "w50h50/Label 50mmx50mm" 50mm 50mm
+#media "w50h70/Label 50mmx70mm" 50mm 70mm
+#media "w50h80/Label 50mmx80mm" 50mm 80mm
+#media "w60h40/Label 60mmx40mm" 60mm 40mm
+#media "w60h60/Label 60mmx60mm" 60mm 60mm
+#media "w60h80/Label 60mmx80mm" 60mm 80mm
+#media "w60h86/Label 60mmx86mm" 60mm 86mm
+#media "w62h100/Label 62mmx100mm" 62mm 100mm
+#media "w70h40/Label 70mmx40mm" 70mm 40mm
+#media "w70h70/Label 70mmx70mm" 70mm 70mm
+#media "w70h80/Label 70mmx80mm" 70mm 80mm
+#media "w4h6/Label 4inx6in" 4in 6in
+
+Manufacturer "Phomemo"
+Version 1.0
+DriverType label
+ColorDevice No
+Attribute "cupsSNMPSupplies" "" "false"
+HWMargins 1mm 0 1mm 0
+
+Filter "application/vnd.cups-raster 100 rastertopm110"
+*Resolution - 8 0 0 0 203dpi
+ColorModel Gray/Grayscale w chunky 0
+
+MediaSize "w40h15"
+MediaSize "w40h20"
+MediaSize "w40h30"
+MediaSize "w40h40"
+MediaSize "w40h60"
+MediaSize "w40h70"
+MediaSize "w40h80"
+MediaSize "w45h15"
+MediaSize "w45h20"
+MediaSize "w45h60"
+MediaSize "w45h80"
+MediaSize "w50h15"
+MediaSize "w50h20"
+MediaSize "w50h30"
+MediaSize "w50h50"
+MediaSize "w50h70"
+MediaSize "w50h80"
+MediaSize "w60h40"
+MediaSize "w60h60"
+MediaSize "w60h80"
+MediaSize "w60h86"
+MediaSize "w62h100"
+MediaSize "w70h40"
+MediaSize "w70h70"
+MediaSize "w70h80"
+*MediaSize "w4h6"
+
+*MediaType 10 "LabelWithGaps/Label With Gaps"
+MediaType 11 "Continuous"
+MediaType 38 "LabelWithMarks/Label With Marks"
+
+{
+  Attribute "NickName" "" "Phomemo M421"
+  ModelName "M421"
+  PCFileName "Phomemo-M421.ppd"
+}

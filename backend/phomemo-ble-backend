@@ -1,0 +1,67 @@
+#!/bin/bash
+#
+# CUPS backend for Phomemo printers via Bluetooth Low Energy.
+#
+# Wraps the phomemo-ble helper binary, running it in the logged-in user's
+# context so it has Bluetooth TCC permission (CoreBluetooth requires this
+# on macOS and cupsd does not have it).
+#
+# Installs to: /usr/libexec/cups/backend/phomemo-ble
+# Permissions:  700 root:wheel (required by CUPS for backends)
+
+BLE_HELPER="/usr/libexec/cups/filter/phomemo-ble"
+
+# Discovery mode — CUPS calls backend with no arguments
+if [ $# -eq 0 ]; then
+  # Find the console (logged-in) user's UID
+  CONSOLE_USER=$(/usr/bin/stat -f%Su /dev/console 2>/dev/null)
+  CONSOLE_UID=$(/usr/bin/id -u "$CONSOLE_USER" 2>/dev/null)
+
+  if [ -z "$CONSOLE_UID" ] || [ "$CONSOLE_UID" = "0" ]; then
+    # No logged-in user — can't scan BLE without TCC permission
+    exit 0
+  fi
+
+  /bin/launchctl asuser "$CONSOLE_UID" "$BLE_HELPER" 2>/dev/null
+  exit 0
+fi
+
+# Print mode — CUPS calls: backend job-id user title copies options [file]
+DEVICE_URI="${DEVICE_URI:-}"
+if [ -z "$DEVICE_URI" ]; then
+  echo "ERROR: No DEVICE_URI set" >&2
+  exit 1
+fi
+
+# Find the console user's UID for Bluetooth access
+CONSOLE_USER=$(/usr/bin/stat -f%Su /dev/console 2>/dev/null)
+CONSOLE_UID=$(/usr/bin/id -u "$CONSOLE_USER" 2>/dev/null)
+
+if [ -z "$CONSOLE_UID" ] || [ "$CONSOLE_UID" = "0" ]; then
+  echo "ERROR: No logged-in user found — Bluetooth requires an active user session" >&2
+  exit 1
+fi
+
+# Buffer data to a temp file (BLE helper reads from file, not stdin,
+# because launchctl asuser doesn't forward stdin reliably).
+# Use TMPDIR (set by CUPS) instead of /tmp/ which the sandbox blocks.
+TMPDATA=$(mktemp "${TMPDIR:-/tmp}/phomemo-ble-print.XXXXXX")
+if [ -n "$6" ]; then
+  cp "$6" "$TMPDATA"
+else
+  cat > "$TMPDATA"
+fi
+
+# Run the BLE helper in the user's context for Bluetooth TCC access
+DEVICE_URI="$DEVICE_URI" /bin/launchctl asuser "$CONSOLE_UID" \
+  "$BLE_HELPER" "$1" "$2" "$3" "$4" "$5" "$TMPDATA" 2>&1
+
+EXIT=$?
+
+rm -f "$TMPDATA"
+
+if [ $EXIT -ne 0 ]; then
+  echo "ERROR: BLE print failed (exit $EXIT)" >&2
+fi
+
+exit $EXIT

@@ -1,0 +1,63 @@
+#!/bin/bash
+#
+# CUPS backend for Phomemo label printers connected via USB CDC serial.
+#
+# Installs to: /usr/libexec/cups/backend/phomemo-serial
+# Permissions:  700 root:wheel (required by CUPS for backends)
+#
+# Copyright (c) 2026 Jacques Germishuys
+# SPDX-License-Identifier: MIT
+#
+# Based on protocol documentation from phomemo-tools
+# Copyright (C) 2020 Laurent Vivier <laurent@vivier.eu>
+
+# Discovery mode — CUPS calls backend with no arguments to list devices
+if [ $# -eq 0 ]; then
+  # USB CDC serial devices
+  for dev in /dev/cu.usbmodem*; do
+    [ -e "$dev" ] || continue
+    name="${dev##*/}"
+    echo "direct phomemo-serial:$dev \"Phomemo USB ($name)\" \"Phomemo Label Printer USB ($name)\" \"MFG:Phomemo;CMD:ESCPOS;\""
+  done
+
+  exit 0
+fi
+
+# Print mode — CUPS calls: backend job-id user title copies options [file]
+DEVICE_URI="${DEVICE_URI:-}"
+if [ -z "$DEVICE_URI" ]; then
+  echo "ERROR: No DEVICE_URI set" >&2
+  exit 1
+fi
+
+# Extract device path from URI: phomemo-serial:/dev/cu.xxxxx
+DEV_PATH="${DEVICE_URI#phomemo-serial:}"
+
+if [ ! -c "$DEV_PATH" ]; then
+  echo "ERROR: Device $DEV_PATH not found — is the printer connected?" >&2
+  exit 1
+fi
+
+# Locate phomemo-send helper (installed alongside the filters)
+SEND="/usr/libexec/cups/filter/phomemo-send"
+if [ ! -x "$SEND" ]; then
+  echo "ERROR: phomemo-send not found at $SEND" >&2
+  exit 1
+fi
+
+# Send data: from file (arg 6) or stdin.
+# phomemo-send handles serial configuration, Bluetooth pacing,
+# and clean connection teardown on a single file descriptor.
+if [ -n "$6" ]; then
+  "$SEND" "$DEV_PATH" "$6"
+else
+  "$SEND" "$DEV_PATH"
+fi
+
+EXIT=$?
+
+if [ $EXIT -ne 0 ]; then
+  echo "ERROR: Failed to send data to $DEV_PATH" >&2
+fi
+
+exit $EXIT

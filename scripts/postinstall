@@ -1,0 +1,68 @@
+#!/bin/bash
+#
+# Post-installation script for phomemo-macos CUPS driver.
+#
+# 1. Restarts CUPS to pick up the new backend
+# 2. Discovers connected Phomemo printers (USB + Bluetooth)
+# 3. Auto-adds discovered printers to CUPS
+#
+
+LOGGER="/usr/bin/logger -t phomemo-postinstall"
+PPD_DIR="/Library/Printers/PPDs/Contents/Resources"
+
+$LOGGER "Starting Phomemo driver post-installation"
+
+# --- Restart CUPS to pick up new backend ---
+
+/bin/launchctl kickstart -k system/org.cups.cupsd 2>/dev/null || true
+
+# Give CUPS a moment to restart
+sleep 2
+
+# --- Auto-discover and add printers ---
+
+add_printer() {
+  local name="$1"
+  local uri="$2"
+  local ppd="$3"
+  local description="$4"
+
+  if [ ! -f "$PPD_DIR/$ppd" ]; then
+    $LOGGER "PPD $ppd not found, skipping $name"
+    return
+  fi
+
+  # Update existing printer (PPD + URI) or add new printer
+  if lpstat -p "$name" >/dev/null 2>&1; then
+    $LOGGER "Updating existing printer: $name"
+    lpadmin -p "$name" -v "$uri" -P "$PPD_DIR/$ppd" 2>/dev/null && \
+      $LOGGER "Successfully updated $name" || \
+      $LOGGER "Failed to update $name"
+  else
+    $LOGGER "Adding printer: $name ($uri)"
+    lpadmin -p "$name" -E \
+      -v "$uri" \
+      -P "$PPD_DIR/$ppd" \
+      -D "$description" \
+      -L "Phomemo" 2>/dev/null && \
+      $LOGGER "Successfully added $name" || \
+      $LOGGER "Failed to add $name"
+  fi
+}
+
+# USB CDC serial printers
+for dev in /dev/cu.usbmodem*; do
+  [ -e "$dev" ] || continue
+  dev_name="${dev##*/cu.}"
+  add_printer "Phomemo-USB-${dev_name}" "phomemo-serial:$dev" "Phomemo-M110.ppd" "Phomemo Label Printer (USB)"
+done
+
+# Bluetooth BLE printers — extract device name from /dev/cu.Q0* path
+for dev in /dev/cu.Q0*; do
+  [ -e "$dev" ] || continue
+  bt_name="${dev##*/cu.}"
+  add_printer "Phomemo-BT-${bt_name}" "phomemo-ble://$bt_name" "Phomemo-M110.ppd" "Phomemo Label Printer (Bluetooth)"
+done
+
+$LOGGER "Post-installation complete"
+exit 0

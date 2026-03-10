@@ -1,0 +1,40 @@
+[package]
+name = "phomemo-filters"
+version = "1.0.0"
+edition = "2021"
+license = "MIT"
+description = "CUPS raster filters for Phomemo thermal printers"
+
+[[bin]]
+name = "rastertopm110"
+path = "src/bin/rastertopm110.rs"
+
+[[bin]]
+name = "rastertopm02"
+path = "src/bin/rastertopm02.rs"
+
+[[bin]]
+name = "rastertopd30"
+path = "src/bin/rastertopd30.rs"
+
+[[bin]]
+name = "phomemo-send"
+path = "src/bin/phomemo-send.rs"
+
+[[bin]]
+name = "phomemo-ble"
+path = "src/bin/phomemo-ble.rs"
+required-features = ["ble"]
+
+[features]
+ble = ["dep:btleplug", "dep:tokio", "dep:uuid"]
+
+[dependencies]
+btleplug = { version = "0.11", optional = true }
+tokio = { version = "1", features = ["rt", "macros", "time"], optional = true }
+uuid = { version = "1", optional = true }
+
+[profile.release]
+opt-level = "s"
+strip = true
+lto = true
