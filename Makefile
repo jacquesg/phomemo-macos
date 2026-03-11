@@ -38,6 +38,8 @@ $(UNIVERSAL):
 			target/$(ARCH_ARM)/release/$(bin) \
 			target/$(ARCH_X86)/release/$(bin) \
 			-output $(UNIVERSAL)/$(bin);)
+	@echo "Ad-hoc signing universal binaries..."
+	$(foreach bin,$(BINARIES),codesign -s - -f $(UNIVERSAL)/$(bin);)
 
 # --- PPD compilation ---
 

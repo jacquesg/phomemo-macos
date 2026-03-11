@@ -19,8 +19,18 @@ const WRITE_CHAR_UUID: Uuid = Uuid::from_u128(0x0000ff02_0000_1000_8000_00805f9b
 const SCAN_TIMEOUT: Duration = Duration::from_secs(5);
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 const CHUNK_SIZE: usize = 100;
-const CHUNK_DELAY: Duration = Duration::from_millis(20);
-const DRAIN_DELAY: Duration = Duration::from_secs(2);
+
+/// Send this many chunks with WriteWithoutResponse (fast burst), then
+/// one chunk with WriteWithResponse as a sync barrier.  The sync write
+/// blocks until the printer ACKs, which it does only when its receive
+/// buffer has space.  This keeps the buffer full (no thermal head
+/// starvation) while preventing overflow (no banding artefacts).
+const SYNC_INTERVAL: usize = 8; // sync every ~800 bytes
+
+/// Fallback delay when the characteristic lacks WRITE support (only
+/// WRITE_WITHOUT_RESPONSE available — no sync barrier possible).
+const FALLBACK_DELAY: Duration = Duration::from_millis(50);
+const DRAIN_DELAY: Duration = Duration::from_secs(1);
 const PROCESS_TIMEOUT: Duration = Duration::from_secs(60);
 
 /// Discovery mode: scan for Phomemo BLE printers and output CUPS device lines.
@@ -115,11 +125,28 @@ async fn send_data(device_name: &str, data: &[u8]) -> Result<(), Box<dyn std::er
         })
         .ok_or("no writable characteristic found on printer")?;
 
-    for chunk in data.chunks(CHUNK_SIZE) {
-        peripheral
-            .write(&write_char, chunk, WriteType::WithoutResponse)
-            .await?;
-        time::sleep(CHUNK_DELAY).await;
+    let can_sync = write_char.properties.contains(CharPropFlags::WRITE);
+
+    // Hybrid flow control: burst fast with WriteWithoutResponse to keep
+    // the printer's buffer full, then periodically send one chunk with
+    // WriteWithResponse as a sync barrier.  The sync write blocks until
+    // the printer ACKs, preventing buffer overflow without starving the
+    // thermal head between every single chunk.
+    for (i, chunk) in data.chunks(CHUNK_SIZE).enumerate() {
+        let is_sync = can_sync && i > 0 && i % SYNC_INTERVAL == 0;
+
+        if is_sync {
+            peripheral
+                .write(&write_char, chunk, WriteType::WithResponse)
+                .await?;
+        } else {
+            peripheral
+                .write(&write_char, chunk, WriteType::WithoutResponse)
+                .await?;
+            if !can_sync {
+                time::sleep(FALLBACK_DELAY).await;
+            }
+        }
     }
 
     time::sleep(DRAIN_DELAY).await;

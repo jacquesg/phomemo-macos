@@ -65,8 +65,11 @@ Installs directly to the CUPS directories without building a
 
 ## Adding a Printer
 
-After installation, add your printer through **System Settings >
-Printers & Scanners** or via the command line.
+USB printers appear automatically in **System Settings >
+Printers & Scanners**. BLE printers must be added manually
+with `lpadmin` — macOS restricts Bluetooth access from
+background services, so CUPS cannot discover BLE devices
+reliably.
 
 ### PPD files
 
