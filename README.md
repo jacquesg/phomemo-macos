@@ -21,21 +21,38 @@ vendor software required.
 ## Requirements
 
 - macOS 12 (Monterey) or later
-- [Rust toolchain](https://rustup.rs/) — for building from
-  source
+- [Rust toolchain](https://rustup.rs/) — only needed for
+  `make install` or `make pkg` (Homebrew installs Rust
+  automatically)
 
 ## Install
 
-### Build and install package
+### Homebrew (recommended)
 
 ```sh
-make pkg
-sudo installer -pkg dist/phomemo-macos-1.0.0.pkg -target /
+brew install jacquesg/phomemo/phomemo-macos
+sudo phomemo-cups-setup
 ```
 
-The installer restarts CUPS and auto-detects any connected
-printers. Check **System Settings > Printers & Scanners** after
-installation.
+Builds from source, compiles PPDs, and installs a setup script.
+The second command copies the driver files to the CUPS
+directories and restarts CUPS. Then add your printer manually
+(see [Adding a Printer](#adding-a-printer)).
+
+### Installer package
+
+Download `phomemo-macos-1.0.0.pkg` from the
+[latest release](https://github.com/jacquesg/phomemo-macos/releases/latest).
+The package is **not signed or notarised**. To install, remove
+the quarantine attribute first:
+
+```sh
+xattr -d com.apple.quarantine phomemo-macos-1.0.0.pkg
+sudo installer -pkg phomemo-macos-1.0.0.pkg -target /
+```
+
+The installer restarts CUPS. Then add your printer manually
+(see [Adding a Printer](#adding-a-printer)).
 
 ### Development install
 
@@ -48,39 +65,66 @@ Installs directly to the CUPS directories without building a
 
 ## Adding a Printer
 
-### Automatic
+After installation, add your printer through **System Settings >
+Printers & Scanners** or via the command line.
 
-Connected USB printers and paired Bluetooth printers are
-discovered during installation and added automatically.
+### PPD files
 
-### Manual (USB)
+Each printer model has its own PPD. Use the one matching your
+printer:
+
+| Model   | PPD file             |
+|---------|----------------------|
+| M02     | `Phomemo-M02.ppd`   |
+| M02 Pro | `Phomemo-M02Pro.ppd` |
+| M02S    | `Phomemo-M02S.ppd`  |
+| T02     | `Phomemo-T02.ppd`   |
+| D30     | `Phomemo-D30.ppd`   |
+| M110    | `Phomemo-M110.ppd`  |
+| M120    | `Phomemo-M120.ppd`  |
+| M220    | `Phomemo-M220.ppd`  |
+| M421    | `Phomemo-M421.ppd`  |
+
+PPDs are installed to
+`/Library/Printers/PPDs/Contents/Resources/`.
+
+### USB
+
+Phomemo printers appear as `/dev/cu.usbmodem*` serial devices.
+List connected devices to find the path:
 
 ```sh
-# Find the serial device
 ls /dev/cu.usbmodem*
+```
 
-# Add the printer (replace DEVICE and MODEL)
+Example — adding an M110 at `/dev/cu.usbmodem14201`:
+
+```sh
 sudo lpadmin -p Phomemo-M110 -E \
-  -v 'phomemo-serial:/dev/cu.DEVICE' \
+  -v 'phomemo-serial:/dev/cu.usbmodem14201' \
   -P /Library/Printers/PPDs/Contents/Resources/Phomemo-M110.ppd
 ```
 
-### Manual (Bluetooth)
+Replace the device path, printer name, and PPD with those
+matching your setup.
+
+### Bluetooth
 
 The BLE backend connects directly to the printer by its
-advertised name — no system-level pairing is required. To find
-the name, check the printer's Bluetooth settings screen or pair
-it in **System Settings > Bluetooth** where the name is shown.
+advertised name — no system-level pairing is required. The
+name is printed on the label on the back of the printer
+(e.g. `Q002E0CP0670069`).
+
+Example — adding a D30 named `Q002E0CP0670069`:
 
 ```sh
-# Replace DEVICE_NAME with the BLE name (e.g. Q002E0CP0670069)
-sudo lpadmin -p Phomemo-BT -E \
-  -v 'phomemo-ble://DEVICE_NAME' \
-  -P /Library/Printers/PPDs/Contents/Resources/Phomemo-M110.ppd
+sudo lpadmin -p Phomemo-D30 -E \
+  -v 'phomemo-ble://Q002E0CP0670069' \
+  -P /Library/Printers/PPDs/Contents/Resources/Phomemo-D30.ppd
 ```
 
-Replace `Phomemo-M110.ppd` with the PPD matching your printer
-model (e.g. `Phomemo-D30.ppd`, `Phomemo-M02.ppd`).
+Replace the BLE name, printer name, and PPD with those matching
+your setup.
 
 ## Connection Types
 
@@ -247,6 +291,15 @@ The test suite includes:
   - Golden-file regression (exact byte comparison)
 
 ## Uninstall
+
+### Homebrew
+
+```sh
+sudo phomemo-cups-setup --uninstall
+brew uninstall phomemo-macos
+```
+
+### Installer package / development install
 
 ```sh
 make uninstall
