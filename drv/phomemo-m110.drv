@@ -38,10 +38,13 @@
 #media "w50h80/Rectangle 50x80mm" 50mm 80mm
 #media "w20h100/Rectangle 20x100mm" 20mm 100mm
 
-// --- Round labels (bounding box) ---
-#media "w20h20/Round 20mm" 20mm 20mm
-#media "w30h30/Round 30mm" 30mm 30mm
-#media "w40h40/Round 40mm" 40mm 40mm
+// --- Round labels ---
+// Page width = stock (backing paper) width.  The round label is centred
+// on the stock; the extra width ensures the filter's right-alignment
+// lands on the stock and "Fit to Page" centres the image on the label.
+#media "w20h20/Round 20mm" 26mm 25mm
+#media "w30h30/Round 30mm" 36mm 35mm
+#media "w40h40/Round 40mm" 46mm 45mm
 #media "w50h50r/Round 50mm" 50mm 50mm
 
 // --- Jewellery / cable labels (printable flag area) ---

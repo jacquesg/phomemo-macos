@@ -31,14 +31,64 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         let packed = to_1bit(&page.data, page.width);
         let src_bpl = page.width.div_ceil(8) as usize;
 
-        // Pad each raster line to the full print head width.  The label
-        // paper is right-aligned against the print head, so all slack
-        // goes to left padding.
-        let dst_bpl = HEAD_WIDTH_BYTES.max(src_bpl);
-        let pad_left = dst_bpl - src_bpl;
-        let left_zeros = vec![0u8; pad_left];
+        // Physical page width (stock width) from the raster header.
+        // Try the v2 float cupsPageSize first (precise), then fall back
+        // to the base-header integer PageSize.  When both are zero the
+        // rasteriser did not populate page geometry and we fall back to
+        // cupsWidth (no centering).
+        let page_bytes = if page.hw_res_x > 0 {
+            if page.page_width_pts > 0.0 {
+                // v2 float cupsPageSize — precise
+                let dots = (page.page_width_pts as f64
+                    * page.hw_res_x as f64
+                    / 72.0
+                    + 0.5) as usize;
+                dots.div_ceil(8)
+            } else if page.page_size_w > 0 {
+                // Base-header integer PageSize — floor to avoid
+                // rounding past a byte boundary.
+                let dots = (page.page_size_w as usize * page.hw_res_x as usize) / 72;
+                (dots / 8).max(src_bpl)
+            } else {
+                src_bpl
+            }
+        } else {
+            src_bpl
+        };
 
-        let height = page.height as u16;
+        // Total row width: at least the print head, but wider if the
+        // page or raster exceeds it (e.g. M220 wide labels).
+        let dst_bpl = HEAD_WIDTH_BYTES.max(page_bytes).max(src_bpl);
+
+        // Right-align the stock on the print head, then centre the
+        // raster data within the stock.
+        let stock_pad = dst_bpl - page_bytes;
+        let margin_left = page_bytes.saturating_sub(src_bpl) / 2;
+        let pad_left = stock_pad + margin_left;
+        let pad_right = dst_bpl - pad_left - src_bpl;
+
+        // Vertical centering: add blank rows at the top of the raster
+        // to push content down.  Only top padding (no bottom) to keep
+        // the total height within the label stock bounds.
+        let page_height_dots = if page.hw_res_x > 0 {
+            if page.page_height_pts > 0.0 {
+                (page.page_height_pts as f64 * page.hw_res_x as f64 / 72.0 + 0.5) as usize
+            } else if page.page_size_h > 0 {
+                (page.page_size_h as usize * page.hw_res_x as usize) / 72
+            } else {
+                page.height as usize
+            }
+        } else {
+            page.height as usize
+        };
+
+        let content_h = page.height as usize;
+        let top_pad = page_height_dots.saturating_sub(content_h) / 2;
+        let total_height = content_h + top_pad;
+
+        let left_zeros = vec![0u8; pad_left];
+        let right_zeros = vec![0u8; pad_right];
+        let blank_row = vec![0u8; dst_bpl];
 
         // --- Header ---
         // Speed
@@ -52,13 +102,18 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         // --- Raster: GS v 0 ---
         out.write_all(b"\x1dv0\x00")?;
         out.write_all(&(dst_bpl as u16).to_le_bytes())?;
-        out.write_all(&height.to_le_bytes())?;
+        out.write_all(&(total_height as u16).to_le_bytes())?;
 
-        for row in 0..page.height as usize {
+        // Top padding: blank rows to push content down
+        for _ in 0..top_pad {
+            out.write_all(&blank_row)?;
+        }
+        for row in 0..content_h {
             let start = row * src_bpl;
             let end = start + src_bpl;
             out.write_all(&left_zeros)?;
             out.write_all(&packed[start..end])?;
+            out.write_all(&right_zeros)?;
         }
 
         // --- Footer ---

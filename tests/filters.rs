@@ -13,12 +13,17 @@ use std::process::{Command, Stdio};
 // Header field offsets (must stay in sync with lib.rs).
 const HEADER_SIZE: usize = 1796;
 const OFF_ADVANCE_DISTANCE: usize = 256;
+const OFF_HW_RES_X: usize = 276;
+const OFF_PAGE_SIZE_W: usize = 352;
+const OFF_PAGE_SIZE_H: usize = 356;
 const OFF_CUPS_WIDTH: usize = 372;
 const OFF_CUPS_HEIGHT: usize = 376;
 const OFF_CUPS_MEDIA_TYPE: usize = 380;
 const OFF_CUPS_BITS_PER_PIXEL: usize = 388;
 const OFF_CUPS_COLOUR_SPACE: usize = 400;
 const OFF_CUPS_NUM_COLOURS: usize = 420;
+const OFF_CUPS_PAGE_SIZE_W: usize = 428;
+const OFF_CUPS_PAGE_SIZE_H: usize = 432;
 
 /// Build a single-page CUPS RaS3 stream (little-endian).
 fn build_ras3(
@@ -48,6 +53,51 @@ fn build_ras3(
 
     buf.extend_from_slice(&header);
     buf.extend_from_slice(pixels);
+    buf
+}
+
+/// Build a RaS3 stream with page geometry (PageSize, cupsPageSize, HWResolution).
+fn build_ras3_with_geometry(
+    width: u32,
+    height: u32,
+    media_type: u32,
+    advance_distance: u32,
+    pixels: &[u8],
+    page_width_pts: f32,
+    page_height_pts: f32,
+    hw_res_x: u32,
+) -> Vec<u8> {
+    let mut buf = build_ras3(width, height, media_type, advance_distance, pixels);
+    let h = 4;
+    buf[h + OFF_HW_RES_X..][..4].copy_from_slice(&hw_res_x.to_le_bytes());
+    // Base-header PageSize (u32, rounded)
+    let page_size_w = (page_width_pts + 0.5) as u32;
+    let page_size_h = (page_height_pts + 0.5) as u32;
+    buf[h + OFF_PAGE_SIZE_W..][..4].copy_from_slice(&page_size_w.to_le_bytes());
+    buf[h + OFF_PAGE_SIZE_H..][..4].copy_from_slice(&page_size_h.to_le_bytes());
+    // v2 cupsPageSize (f32)
+    buf[h + OFF_CUPS_PAGE_SIZE_W..][..4].copy_from_slice(&page_width_pts.to_le_bytes());
+    buf[h + OFF_CUPS_PAGE_SIZE_H..][..4].copy_from_slice(&page_height_pts.to_le_bytes());
+    buf
+}
+
+/// Build a RaS3 stream with only base-header PageSize (no v2 cupsPageSize float).
+/// Simulates macOS cgpdftoraster which may not populate v2 extensions.
+fn build_ras3_with_base_geometry(
+    width: u32,
+    height: u32,
+    media_type: u32,
+    advance_distance: u32,
+    pixels: &[u8],
+    page_size_w: u32,
+    page_size_h: u32,
+    hw_res_x: u32,
+) -> Vec<u8> {
+    let mut buf = build_ras3(width, height, media_type, advance_distance, pixels);
+    let h = 4;
+    buf[h + OFF_HW_RES_X..][..4].copy_from_slice(&hw_res_x.to_le_bytes());
+    buf[h + OFF_PAGE_SIZE_W..][..4].copy_from_slice(&page_size_w.to_le_bytes());
+    buf[h + OFF_PAGE_SIZE_H..][..4].copy_from_slice(&page_size_h.to_le_bytes());
     buf
 }
 
@@ -146,7 +196,7 @@ fn m110_raster_dimensions_padded() {
 #[test]
 fn m110_left_padding_narrow_image() {
     // 8px wide (1 byte), all black. Print head is 48 bytes.
-    // Paper is right-aligned → 47 bytes of left padding + 1 byte of data.
+    // Stock is right-aligned → 47 bytes of left padding + 1 byte of data.
     let input = build_ras3(8, 1, 10, 0, &vec![0u8; 8]);
     let out = run_filter(env!("CARGO_BIN_EXE_rastertopm110"), &input);
 
@@ -163,17 +213,13 @@ fn m110_left_padding_narrow_image() {
 }
 
 #[test]
-fn m110_full_width_no_padding() {
-    // 384px wide = 48 bytes, matches print head exactly → no padding.
+fn m110_full_width() {
+    // 384px wide = 48 bytes.
     let input = build_ras3(384, 1, 10, 0, &vec![0u8; 384]);
     let out = run_filter(env!("CARGO_BIN_EXE_rastertopm110"), &input);
 
     let gs = find_bytes(&out, GS_V_0).expect("GS v 0 not found");
-    assert_eq!(
-        le_u16(&out, gs + 4),
-        48,
-        "width = 48 bytes, no extra padding"
-    );
+    assert_eq!(le_u16(&out, gs + 4), 48, "width = 48 bytes");
 
     let raster = gs + 8;
     assert!(
@@ -225,6 +271,124 @@ fn m110_golden_8x1_black() {
     expected.extend_from_slice(b"\x1f\xf0\x03\x00"); // footer 2
 
     assert_eq!(out, expected, "golden output mismatch for 8x1 black M110");
+}
+
+#[test]
+fn m110_round_label_centering() {
+    // 20mm round label on 26mm stock.  PPD sets cupsPageSize = 26mm
+    // (73.7pt) and ImageableArea = 20mm (3mm margins each side).
+    // cupsWidth = 160px (20mm @ 203dpi) → src_bpl = 20 bytes.
+    // page_bytes = round(73.7 * 203 / 72) / 8 = 208 / 8 = 26 bytes.
+    // stock_pad = 48 - 26 = 22,  margin = (26-20)/2 = 3.
+    // pad_left = 25,  pad_right = 3.
+    let pixels = vec![0u8; 160]; // all black, 1 row
+    let input = build_ras3_with_geometry(160, 1, 10, 0, &pixels, 73.700787, 0.0, 203);
+    let out = run_filter(env!("CARGO_BIN_EXE_rastertopm110"), &input);
+
+    let gs = find_bytes(&out, GS_V_0).expect("GS v 0 not found");
+    assert_eq!(le_u16(&out, gs + 4), 48, "width = 48 bytes");
+
+    let r = gs + 8;
+    assert!(out[r..r + 25].iter().all(|&b| b == 0), "25 bytes left padding");
+    assert!(out[r + 25..r + 45].iter().all(|&b| b == 0xFF), "20 bytes data");
+    assert!(out[r + 45..r + 48].iter().all(|&b| b == 0), "3 bytes right padding");
+}
+
+#[test]
+fn m110_page_geometry_no_margins() {
+    // Page width matches raster width (no ImageableArea margins).
+    // Behaves identically to no page geometry.
+    let pixels = vec![0u8; 160]; // all black, 1 row
+    let input = build_ras3_with_geometry(160, 1, 10, 0, &pixels, 56.692913, 0.0, 203);
+    let out = run_filter(env!("CARGO_BIN_EXE_rastertopm110"), &input);
+
+    let gs = find_bytes(&out, GS_V_0).expect("GS v 0 not found");
+    let r = gs + 8;
+
+    // page_bytes = round(56.69 * 203/72) = 160/8 = 20.  Same as src_bpl.
+    // pad_left = 48 - 20 = 28, pad_right = 0.
+    assert!(out[r..r + 28].iter().all(|&b| b == 0), "28 bytes left padding");
+    assert!(out[r + 28..r + 48].iter().all(|&b| b == 0xFF), "20 bytes data");
+}
+
+#[test]
+fn m110_round_label_centering_base_header_only() {
+    // Same scenario as m110_round_label_centering but with only the
+    // base-header PageSize (u32) — no v2 cupsPageSize float.
+    // This simulates macOS cgpdftoraster which may not set v2 fields.
+    //
+    // PageSize = 74pt (26mm rounded), HWRes = 203.
+    // page_dots = (74 * 203) / 72 = 208 (integer division).
+    // page_bytes = max(208/8, 20) = max(26, 20) = 26.
+    // Same centering: pad_left=25, pad_right=3.
+    let pixels = vec![0u8; 160];
+    let input = build_ras3_with_base_geometry(160, 1, 10, 0, &pixels, 74, 0, 203);
+    let out = run_filter(env!("CARGO_BIN_EXE_rastertopm110"), &input);
+
+    let gs = find_bytes(&out, GS_V_0).expect("GS v 0 not found");
+    assert_eq!(le_u16(&out, gs + 4), 48, "width = 48 bytes");
+
+    let r = gs + 8;
+    assert!(out[r..r + 25].iter().all(|&b| b == 0), "25 bytes left padding");
+    assert!(out[r + 25..r + 45].iter().all(|&b| b == 0xFF), "20 bytes data");
+    assert!(out[r + 45..r + 48].iter().all(|&b| b == 0), "3 bytes right padding");
+}
+
+#[test]
+fn m110_vertical_centering() {
+    // 8px wide, 4 rows high.  page_height_pts = 3.5pt → page_height_dots =
+    // floor(3.5 * 203 / 72 + 0.5) = 10.
+    // top_pad = (10 - 4) / 2 = 3.  total_height = 4 + 3 = 7.
+    let pixels = vec![0u8; 8 * 4]; // all black, 4 rows
+    let input = build_ras3_with_geometry(8, 4, 10, 0, &pixels, 0.0, 3.5, 203);
+    let out = run_filter(env!("CARGO_BIN_EXE_rastertopm110"), &input);
+
+    let gs = find_bytes(&out, GS_V_0).expect("GS v 0 not found");
+    assert_eq!(le_u16(&out, gs + 4), 48, "width = 48 bytes");
+    assert_eq!(le_u16(&out, gs + 6), 7, "height = 7 (4 content + 3 top pad)");
+
+    let r = gs + 8;
+    // First 3 rows: blank (3 × 48 = 144 bytes of zeros)
+    assert!(
+        out[r..r + 144].iter().all(|&b| b == 0),
+        "top padding should be all zeros"
+    );
+    // Content rows: 47 bytes left padding + 1 byte all-black
+    for row in 0..4 {
+        let s = r + 144 + row * 48;
+        assert!(out[s..s + 47].iter().all(|&b| b == 0), "left pad row {row}");
+        assert_eq!(out[s + 47], 0xFF, "data row {row}");
+    }
+}
+
+#[test]
+fn m110_round_label_centering_both_axes() {
+    // 20mm round label on 26mm × 25mm stock (w20h20 media).
+    // cupsWidth = 160 (20mm @ 203dpi), cupsHeight = 160.
+    // page_width_pts = 73.700787 (26mm), page_height_pts = 70.866142 (25mm).
+    //
+    // Horizontal: page_bytes = 26, src_bpl = 20, pad_left = 25, pad_right = 3.
+    // Vertical: page_height_dots = floor(70.866142 * 203/72 + 0.5) = 200.
+    // top_pad = (200 - 160) / 2 = 20.  total_height = 180.
+    let pixels = vec![0u8; 160 * 160]; // all black
+    let input = build_ras3_with_geometry(160, 160, 10, 0, &pixels, 73.700787, 70.866142, 203);
+    let out = run_filter(env!("CARGO_BIN_EXE_rastertopm110"), &input);
+
+    let gs = find_bytes(&out, GS_V_0).expect("GS v 0 not found");
+    assert_eq!(le_u16(&out, gs + 4), 48, "width = 48 bytes");
+    assert_eq!(le_u16(&out, gs + 6), 180, "height = 180 (160 + 20 top pad)");
+
+    let r = gs + 8;
+    // 20 blank rows of top padding (20 × 48 = 960 bytes)
+    assert!(
+        out[r..r + 960].iter().all(|&b| b == 0),
+        "20 blank rows of top padding"
+    );
+    // First content row: 25 bytes zero + 20 bytes 0xFF + 3 bytes zero
+    let c = r + 960;
+    assert!(out[c..c + 25].iter().all(|&b| b == 0), "left padding");
+    assert!(out[c + 25..c + 45].iter().all(|&b| b == 0xFF), "content data");
+    assert!(out[c + 45..c + 48].iter().all(|&b| b == 0), "right padding");
 }
 
 // ===========================================================================

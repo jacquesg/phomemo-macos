@@ -27,9 +27,12 @@ all: ppd rust
 
 # --- Rust filter build (universal binaries) ---
 
-rust: $(UNIVERSAL)
+RUST_SOURCES = $(wildcard src/*.rs src/bin/*.rs) Cargo.toml Cargo.lock
+RUST_STAMP   = build/.rust-stamp
 
-$(UNIVERSAL):
+rust: $(RUST_STAMP)
+
+$(RUST_STAMP): $(RUST_SOURCES)
 	cargo build --release --features ble --target $(ARCH_ARM)
 	cargo build --release --features ble --target $(ARCH_X86)
 	mkdir -p $(UNIVERSAL)
@@ -40,6 +43,7 @@ $(UNIVERSAL):
 			-output $(UNIVERSAL)/$(bin);)
 	@echo "Ad-hoc signing universal binaries..."
 	$(foreach bin,$(BINARIES),codesign -s - -f $(UNIVERSAL)/$(bin);)
+	@touch $@
 
 # --- PPD compilation ---
 
@@ -47,6 +51,16 @@ ppd: $(PPD_FILES)
 
 $(PPD_DIR)/%.stamp: $(DRV_DIR)/%.drv | $(PPD_DIR)
 	ppdc -d $(PPD_DIR) $<
+	@# Patch round-label ImageableArea: ppdc lacks per-media margin support.
+	@# Horizontal: 3mm (8.504pt) each side to centre label on stock.
+	@# Vertical: 2.5mm (7.087pt) each side (calibrated from test prints).
+	@for f in $(PPD_DIR)/*.ppd; do \
+		gsed -i \
+			-e '/ImageableArea w20h20/s/"[^"]*"/"8.503937 7.086614 65.196850 63.779528"/' \
+			-e '/ImageableArea w30h30/s/"[^"]*"/"8.503937 7.086614 93.543307 92.125984"/' \
+			-e '/ImageableArea w40h40/s/"[^"]*"/"8.503937 7.086614 121.889764 120.472441"/' \
+			"$$f"; \
+	done
 	@touch $@
 
 $(PPD_DIR):
@@ -54,7 +68,7 @@ $(PPD_DIR):
 
 # --- Package build ---
 
-pkg: ppd rust | $(ROOT_DIR) $(DIST_DIR)
+pkg: ppd $(RUST_STAMP) | $(ROOT_DIR) $(DIST_DIR)
 	# Backend
 	install -d $(ROOT_DIR)$(CUPS_BACKEND_DIR)
 	install -m 700 backend/phomemo-serial $(ROOT_DIR)$(CUPS_BACKEND_DIR)/phomemo-serial

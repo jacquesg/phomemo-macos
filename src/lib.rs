@@ -21,12 +21,17 @@ const MAGIC_LE: [u8; 4] = *b"3SaR";
 // Byte offsets into the 1796-byte page header for the fields we need.
 // The first 256 bytes are four 64-byte strings; u32 fields follow.
 const OFF_ADVANCE_DISTANCE: usize = 256; // field[4]
+const OFF_HW_RES_X: usize = 276; // HWResolution[0]
+const OFF_PAGE_SIZE_W: usize = 352; // PageSize[0] (u32, points)
+const OFF_PAGE_SIZE_H: usize = 356; // PageSize[1] (u32, points)
 const OFF_CUPS_WIDTH: usize = 372; // field[33]
 const OFF_CUPS_HEIGHT: usize = 376; // field[34]
 const OFF_CUPS_MEDIA_TYPE: usize = 380; // field[35]
 const OFF_CUPS_BITS_PER_PIXEL: usize = 388; // field[37]
 const OFF_CUPS_COLOUR_SPACE: usize = 400; // cupsColorSpace (after cupsColorOrder at 396)
 const OFF_CUPS_NUM_COLOURS: usize = 420; // cupsNumColors (after cupsRowStep at 416)
+const OFF_CUPS_PAGE_SIZE_W: usize = 428; // cupsPageSize[0] (float, points)
+const OFF_CUPS_PAGE_SIZE_H: usize = 432; // cupsPageSize[1] (float, points)
 
 // ---------------------------------------------------------------------------
 // Error type
@@ -75,6 +80,15 @@ pub struct Page {
     pub colour_space: u32,
     pub num_colours: u32,
     pub advance_distance: u32,
+    /// Physical page size in points (from base PageSize, u32).
+    pub page_size_w: u32,
+    pub page_size_h: u32,
+    /// Physical page size in points (from v2 cupsPageSize, f32).
+    /// Zero when the rasteriser does not populate the v2 extension.
+    pub page_width_pts: f32,
+    pub page_height_pts: f32,
+    /// Horizontal resolution in DPI (from HWResolution[0]).
+    pub hw_res_x: u32,
     /// Raw grayscale pixel data (1 byte per pixel, row-major).
     pub data: Vec<u8>,
 }
@@ -102,6 +116,21 @@ fn read_u32(buf: &[u8], offset: usize, order: ByteOrder) -> u32 {
     match order {
         ByteOrder::Big => u32::from_be_bytes(bytes),
         ByteOrder::Little => u32::from_le_bytes(bytes),
+    }
+}
+
+/// Read an `f32` from a byte slice at the given offset using the specified
+/// byte order.
+fn read_f32(buf: &[u8], offset: usize, order: ByteOrder) -> f32 {
+    let bytes: [u8; 4] = [
+        buf[offset],
+        buf[offset + 1],
+        buf[offset + 2],
+        buf[offset + 3],
+    ];
+    match order {
+        ByteOrder::Big => f32::from_be_bytes(bytes),
+        ByteOrder::Little => f32::from_le_bytes(bytes),
     }
 }
 
@@ -156,6 +185,11 @@ pub fn parse_ras3(input: &[u8]) -> Result<Vec<Page>, RasterError> {
         let colour_space = read_u32(header, OFF_CUPS_COLOUR_SPACE, order);
         let num_colours = read_u32(header, OFF_CUPS_NUM_COLOURS, order);
         let advance_distance = read_u32(header, OFF_ADVANCE_DISTANCE, order);
+        let hw_res_x = read_u32(header, OFF_HW_RES_X, order);
+        let page_size_w = read_u32(header, OFF_PAGE_SIZE_W, order);
+        let page_size_h = read_u32(header, OFF_PAGE_SIZE_H, order);
+        let page_width_pts = read_f32(header, OFF_CUPS_PAGE_SIZE_W, order);
+        let page_height_pts = read_f32(header, OFF_CUPS_PAGE_SIZE_H, order);
 
         if width == 0 || height == 0 {
             return Err(RasterError::TooShort {
@@ -182,6 +216,11 @@ pub fn parse_ras3(input: &[u8]) -> Result<Vec<Page>, RasterError> {
             colour_space,
             num_colours,
             advance_distance,
+            page_size_w,
+            page_size_h,
+            page_width_pts,
+            page_height_pts,
+            hw_res_x,
             data: input[data_start..data_end].to_vec(),
         });
 
