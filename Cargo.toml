@@ -27,12 +27,13 @@ path = "src/bin/phomemo-ble.rs"
 required-features = ["ble"]
 
 [features]
-ble = ["dep:btleplug", "dep:tokio", "dep:uuid"]
+ble = ["dep:btleplug", "dep:tokio", "dep:uuid", "dep:futures"]
 
 [dependencies]
 btleplug = { version = "0.11", optional = true }
 tokio = { version = "1", features = ["rt", "macros", "time"], optional = true }
 uuid = { version = "1", optional = true }
+futures = { version = "0.3", optional = true }
 
 [profile.release]
 opt-level = "s"
