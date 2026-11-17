@@ -10,11 +10,19 @@ use std::time::Duration;
 
 use btleplug::api::{Central, CharPropFlags, Manager as _, Peripheral as _, ScanFilter, WriteType};
 use btleplug::platform::Manager;
+use futures::StreamExt;
 use tokio::time;
 use uuid::Uuid;
 
 /// Phomemo BLE write characteristic UUID (short: FF02).
 const WRITE_CHAR_UUID: Uuid = Uuid::from_u128(0x0000ff02_0000_1000_8000_00805f9b34fb);
+
+/// Phomemo BLE notify characteristic (FF03). The M220 ignores a job unless
+/// the host has subscribed to it first (verified on a real M220, 2026-11-16).
+const NOTIFY_CHAR_UUID: Uuid = Uuid::from_u128(0x0000ff03_0000_1000_8000_00805f9b34fb);
+
+/// How long to wait for the printer's end-of-job status (first byte 0x1A).
+const DONE_TIMEOUT: Duration = Duration::from_secs(30);
 
 const SCAN_TIMEOUT: Duration = Duration::from_secs(5);
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
@@ -113,6 +121,19 @@ async fn send_data(device_name: &str, data: &[u8]) -> Result<(), Box<dyn std::er
     peripheral.connect().await?;
     peripheral.discover_services().await?;
 
+    // Subscribe to FF03 before writing anything, then give the printer a
+    // moment. Without this the M220 accepts the bytes and prints nothing.
+    let notify_char = peripheral
+        .characteristics()
+        .into_iter()
+        .find(|c| c.uuid == NOTIFY_CHAR_UUID);
+    let mut notifications = None;
+    if let Some(nc) = &notify_char {
+        peripheral.subscribe(nc).await?;
+        notifications = Some(peripheral.notifications().await?);
+        time::sleep(Duration::from_secs(1)).await;
+    }
+
     let write_char = peripheral
         .characteristics()
         .into_iter()
@@ -147,6 +168,19 @@ async fn send_data(device_name: &str, data: &[u8]) -> Result<(), Box<dyn std::er
                 time::sleep(FALLBACK_DELAY).await;
             }
         }
+    }
+
+    // Wait for the printer's end-of-job status (0x1A ...) before hanging up,
+    // so disconnecting cannot cut the print short.
+    if let Some(stream) = notifications.as_mut() {
+        let _ = time::timeout(DONE_TIMEOUT, async {
+            while let Some(n) = stream.next().await {
+                if n.value.first() == Some(&0x1a) {
+                    break;
+                }
+            }
+        })
+        .await;
     }
 
     time::sleep(DRAIN_DELAY).await;

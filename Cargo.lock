@@ -446,6 +446,7 @@ name = "phomemo-filters"
 version = "1.0.0"
 dependencies = [
  "btleplug",
+ "futures",
  "tokio",
  "uuid",
 ]
